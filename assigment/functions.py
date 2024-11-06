@@ -70,12 +70,15 @@ def connection_establish(ip_p):
         ip,port=ip_p.split(':')
         port = int(port)
         socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        socket_client.settimeout(5)
         socket_client.connect((ip, port))
         return socket_client,'success'
     except ValueError:
         return None, 'Invalid IP:port format'
     except socket.gaierror:
         return None, 'Invalid IP address'
+    except socket.timeout:
+        return None, 'Connection timed out'
     except socket.error:
         return None, 'Connection failed'
     except Exception:
@@ -358,7 +361,7 @@ def login_cmds(receive_data, users, login_user):
 
     # 7. 断开连接
     elif cmd[0] == "exit":
-        feedback_data = "200:disconnected"
+        feedback_data = SUCCESS('disconnected')
         login_user = None  # 清空登录用户
 
     # 8. 注销登录

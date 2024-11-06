@@ -1,4 +1,4 @@
-from functions import connection_establish, server_message_encrypt, server_response
+from functions import connection_establish, server_message_encrypt, server_response, SUCCESS
 
 if __name__ == '__main__':
     print("欢迎使用Telnet服务")
@@ -12,11 +12,9 @@ if __name__ == '__main__':
         print(info)
         ## Task 1.1
 
-        local_ip, local_port = established_client.getsockname()
-        # print(f"Local IP: {local_ip}, Local Port: {local_port}")
-
         if established_client:
             while True:
+                local_ip, local_port = established_client.getsockname()
                 # cmd = input(f"{ip_port}:").strip()
                 cmd = input(f"{local_ip}:{local_port}: ").strip()
                 if not cmd:
@@ -29,7 +27,8 @@ if __name__ == '__main__':
                 recv_data = server_response(established_client, pwd_hash).decode("utf-8")
                 ## Task 3.4
                 print(f"{ip_port}: {recv_data}")
-                if recv_data == "disconnected":
+                if recv_data == SUCCESS('disconnected'):
                     break
             established_client.close()
+            break
     print("欢迎下次使用")
