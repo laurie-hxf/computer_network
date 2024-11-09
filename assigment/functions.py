@@ -150,32 +150,37 @@ def login_authentication(conn, cmd, users):
     # TODO: finish the codes
     # 提取用户名
     username = cmd[1]
+    password = cmd[2]
 
     # 检查用户名是否存在
     if username in users:
         # 获取该用户的 MD5 加密密码
         password_hash = users[username]
 
-        # 生成一个随机挑战
-        challenge = generate_challenge()
+        if password == password_hash:
+            # 生成一个随机挑战
+            challenge = generate_challenge()
 
-        # 将挑战发送给客户端
-        conn.send(challenge)
+            # 将挑战发送给客户端
+            conn.send(challenge)
 
-        # 接收客户端发送回来的加密响应
-        client_response = conn.recv(1024)
+            # 接收客户端发送回来的加密响应
+            client_response = conn.recv(1024)
 
-        # 服务器计算预期的响应
-        expected_response = calculate_response(password_hash, challenge)
+            # 服务器计算预期的响应
+            expected_response = calculate_response(password_hash, challenge)
 
-        # 比较客户端的响应和服务器的预期响应
-        if client_response == expected_response:
-            feedback = f"User '{username}' logged in successfully."
+            # 比较客户端的响应和服务器的预期响应
+            if client_response == expected_response:
+                feedback = f"User '{username}' logged in successfully."
             # conn.send(feedback.encode())  # 发送成功消息给客户端
-            return feedback, username
+                return feedback, username
+            else:
+                feedback = "password wrong,try again."
+                # conn.send(feedback.encode())  # 发送失败消息给客户端
+                return feedback, None
         else:
             feedback = "password wrong,try again."
-            # conn.send(feedback.encode())  # 发送失败消息给客户端
             return feedback, None
     else:
         feedback = "Invalid username,please register first."
