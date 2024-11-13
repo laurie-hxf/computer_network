@@ -27,7 +27,7 @@ if __name__ == '__main__':
                 recv_data = server_response(established_client, pwd_hash).decode("utf-8")
                 ## Task 3.4
                 print(f"{ip_port}: {recv_data}")
-                if recv_data == SUCCESS('disconnected'):
+                if recv_data == "200:disconnected":
                     break
             established_client.close()
             break

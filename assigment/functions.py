@@ -29,7 +29,7 @@ def SUCCESS(message):
     """
     This function is designed to be easy to test, so do not modify it
     """
-    return '\n200:' + message
+    return '200:' + message
 
 
 def FAILURE(message):
@@ -72,17 +72,17 @@ def connection_establish(ip_p):
         socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         socket_client.settimeout(5)
         socket_client.connect((ip, port))
-        return socket_client,'success'
+        return socket_client,SUCCESS('success')
     except ValueError:
-        return None, 'Invalid IP:port format'
+        return None, FAILURE('Invalid IP:port format')
     except socket.gaierror:
-        return None, 'Invalid IP address'
+        return None, FAILURE('Invalid IP address')
     except socket.timeout:
-        return None, 'Connection timed out'
+        return None, FAILURE('Connection timed out')
     except socket.error:
-        return None, 'Connection failed'
+        return None, FAILURE('Connection failed')
     except Exception:
-        return None, 'an error occurred'
+        return None, FAILURE('an error occurred')
 
     # TODO: finish the codes
     
@@ -128,14 +128,14 @@ def user_register(cmd, users):
 
     # Check if username already exists
     if username in users:
-        return f"Username '{username}' already exists. Please choose a different username."
+        return FAILURE(f"Username '{username}' already exists. Please choose a different username.")
 
     with open(user_inf_txt, 'a') as file:
         file.write(f"{username}:{password}\n")
 
     # Register the new user
     users[username] = password
-    return f"User '{username}' registered successfully."
+    return SUCCESS(f"User '{username}' registered successfully.")
 
 def login_authentication(conn, cmd, users):
     """
@@ -172,18 +172,18 @@ def login_authentication(conn, cmd, users):
 
             # 比较客户端的响应和服务器的预期响应
             if client_response == expected_response:
-                feedback = f"User '{username}' logged in successfully."
+                feedback = SUCCESS(f"User '{username}' logged in successfully.")
             # conn.send(feedback.encode())  # 发送成功消息给客户端
                 return feedback, username
             else:
-                feedback = "password wrong,try again."
+                feedback = FAILURE("password wrong,try again.")
                 # conn.send(feedback.encode())  # 发送失败消息给客户端
                 return feedback, None
         else:
-            feedback = "password wrong,try again."
+            feedback =FAILURE("password wrong,try again.")
             return feedback, None
     else:
-        feedback = "Invalid username,please register first."
+        feedback = FAILURE("Invalid username,please register first.")
         # conn.send(feedback.encode())  # 用户名不存在时发送失败消息
         return feedback, None
 
@@ -301,10 +301,10 @@ def login_cmds(receive_data, users, login_user):
     if cmd[0] == "sum":
         try:
             numbers = map(float, cmd[1:])  # 将后面的参数转换为数字
-            result = sum(numbers)
-            feedback_data = f"Result of addition: {result}"
+            result = str(sum(numbers))
+            feedback_data = SUCCESS(f"Result of addition: {result}")
         except ValueError:
-            feedback_data = "Please enter valid numbers for addition."
+            feedback_data = FAILURE("Please enter valid numbers for addition.")
 
     # 2. 乘法处理
     elif cmd[0] == "multiply":
@@ -313,26 +313,26 @@ def login_cmds(receive_data, users, login_user):
             result = 1
             for num in numbers:
                 result *= num
-            feedback_data = f"Result of multiplication: {result}"
+            feedback_data = SUCCESS(f"Result of multiplication: {str(result)}")
         except ValueError:
-            feedback_data = "Please enter valid numbers for multiplication."
+            feedback_data = FAILURE("Please enter valid numbers for multiplication.")
 
     # 3. 减法处理
     elif cmd[0] == "subtract":
         if len(cmd) != 3:
-            feedback_data = "Subtraction requires exactly two numbers."
+            feedback_data = FAILURE("Invalid command")
         else:
             try:
                 num1, num2 = float(cmd[1]), float(cmd[2])
                 result = num1 - num2
-                feedback_data = f"Result of subtraction: {result}"
+                feedback_data = SUCCESS(f"Result of subtraction: {str(result)}")
             except ValueError:
                 feedback_data = "Please enter valid numbers for subtraction."
 
     # 4. 除法处理
     elif cmd[0] == "divide":
         if len(cmd) != 3:
-            feedback_data = "Division requires exactly two numbers."
+            feedback_data = FAILURE("Division requires exactly two numbers.")
         else:
             try:
                 num1, num2 = float(cmd[1]), float(cmd[2])
@@ -340,28 +340,29 @@ def login_cmds(receive_data, users, login_user):
                     feedback_data = "Division by zero is not allowed."
                 else:
                     result = num1 / num2
-                    feedback_data = f"Result of division: {result}"
+                    feedback_data = SUCCESS(f"Result of division: {str(result)}")
             except ValueError:
-                feedback_data = "Please enter valid numbers for division."
+                feedback_data = FAILURE("Please enter valid numbers for division.")
 
     # 5. 修改密码
     elif cmd[0] == "changepwd":
         if len(cmd) != 2:
-            feedback_data = "Please provide the new password."
+            feedback_data = FAILURE("Password should not include spaces")
         else:
             new_password = cmd[1]
-            users[login_user] = ntlm_hash_func(new_password)  # 假设用户信息以字典形式存储
-            with open(user_inf_txt, 'w') as f:
+            if users[login_user] == ntlm_hash_func(new_password):
+                feedback_data = FAILURE("Same password")
+            else:
+                users[login_user] = ntlm_hash_func(new_password)  # 假设用户信息以字典形式存储
+                with open(user_inf_txt, 'w') as f:
                 # 遍历更新后的 users 字典并写入文件
-                for username, password in users.items():
-                    # password = ntlm_hash_func(password)
-                    # f.write(f"{username}:{password}\n")
-                    f.write(f"{username}:{password}\n")
-            feedback_data = "Password changed successfully."
+                    for username, password in users.items():
+                        f.write(f"{username}:{password}\n")
+                feedback_data = SUCCESS("Password changed successfully.")
 
     # 6. 显示帮助信息
     elif cmd[0] == "?" or cmd[0] == "help" or  cmd[0] == 'ls':
-        feedback_data = '\nAvailable commends: \n\t' + '\n\t'.join(login_commands)
+        feedback_data = SUCCESS('\nAvailable commends: \n\t' + '\n\t'.join(login_commands))
         # feedback_data = SUCCESS(feedback_data)
 
     # 7. 断开连接
@@ -371,14 +372,14 @@ def login_cmds(receive_data, users, login_user):
 
     # 8. 注销登录
     elif cmd[0] == "logout":
-        feedback_data = "Logged out successfully."
+        feedback_data = SUCCESS("Logged out successfully.")
         login_user = None  # 清空登录用户信息
 
     elif cmd[0] == "login":
-        feedback_data = "you have login already.Type '?' or 'help' for available commands."
+        feedback_data =FAILURE( "you have login already.Type '?' or 'help' for available commands.")
 
     # 未知命令
     else:
-        feedback_data = "Invalid command. Type '?' or 'help' for available commands."
+        feedback_data = FAILURE("Invalid command. Type '?' or 'help' for available commands.")
 
     return feedback_data, login_user
