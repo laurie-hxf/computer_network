@@ -2,6 +2,7 @@ import asyncio
 import socket
 import threading
 
+
 from util import *
 
 
@@ -65,9 +66,12 @@ class ConferenceServer:
                 print(f"Received message from {addr}: {message}")
 
                 # 简单的控制协议处理
-                if message == "EXIT":
+                if message == "quit":
                     print(f"Client {addr} requested to exit.")
-                    break
+                    if reader==self.creator:
+                        await self.cancel_conference()
+                    else:break
+
                 elif message.startswith("DATA_TYPE"):
                     _, data_type = message.split()
                     await self.handle_data(reader, writer, data_type)
@@ -103,28 +107,18 @@ class ConferenceServer:
         self.client_conns.clear()
         print("All clients disconnected. Conference cancelled.")
 
-
-    def start(self):
-        '''
-        start the ConferenceServer and necessary running tasks to handle clients in this conference
-        '''
-
-        async def server_task():
-            server = await asyncio.start_server(
-                self.handle_client,  # 每个客户端的连接交由 handle_client 处理
-                '0.0.0.0',  # 监听所有 IP
-                self.conf_serve_ports
-            )
-            print(f"ConferenceServer {self.conference_id} started on port {self.conf_serve_ports}.")
-
-            async with server:
-                # 启动日志记录任务
-                log_task = asyncio.create_task(self.log())
-
-                # 保持服务器运行直到取消
-                await server.serve_forever()
-
-        asyncio.run(server_task())
+    async def start(self):
+        """
+        Start the conference server.
+        """
+        self.running = True
+        self.server = await asyncio.start_server(
+            self.handle_client, "127.0.0.1", 0
+        )
+        port = self.server.sockets[0].getsockname()[1]
+        print(f"Conference {self.conference_id} started on port {port}.")
+        async with self.server:
+            await self.server.serve_forever()
 
 
 class MainServer:
@@ -143,37 +137,53 @@ class MainServer:
         """
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
         """
-        # conn.sendall("Enter conference name: ".encode())
-        # conference_name = conn.recv(1024).decode().strip()
 
         conference_id = len(self.conference_servers) + 1
         conference_server = ConferenceServer(conference_id,conn)
         self.conference_servers[conference_id] = conference_server
 
+        # await self._send_async(conn, f"Conference created successfully! ID: {conference_id}\n")
         conn.sendall(f"Conference created successfully! ID: {conference_id}\n".encode())
+        asyncio.run(conference_server.start())
 
+        # conference_id = f"conf_{len(self.conference_servers) + 1}"  # Generate unique conference ID
+        # conf_server = ConferenceServer(conference_id)
+        # conf_server.start()
+        # self.conference_servers[conference_id] = conf_server
+        # writer.write(f"Conference Created: {conference_id}".encode())
+        # await writer.drain()
 
     def handle_join_conference(self, conn):
         """
-        join conference: search corresponding conference_info and ConferenceServer, and reply necessary info to client
+        Join conference: add the client to the specified conference.
         """
-        # 判断当前是否有正在进行的会议
-        conference_ids = list(self.conference_servers.keys())
-        if len(conference_ids) == 0:
-            conn.sendall("The conference server is empty.\n".encode())
-            return
-        else:
-            conn.sendall(" ".encode())
-        # conn.sendall("Enter conference ID: ".encode())
+        conn.sendall("Enter conference ID to join: ".encode())
         conference_id = conn.recv(1024).decode().strip()
-        if  self.conference_servers.get(int(conference_id)) is None:
+
+        if conference_id not in self.conference_servers:
             conn.sendall("Conference not found.\n".encode())
             return
-        else:
-            # conn.sendall(" ".encode())
-            conference_server = self.conference_servers[int(conference_id)]
-            conn.sendall(f"Joining conference {conference_id}...\n".encode())
-            threading.Thread(target=conference_server.handle_client, args=(conn, conn.getpeername())).start()
+
+        conference_server = self.conference_servers[conference_id]
+        conn.sendall(f"Joining conference {conference_id}...\n".encode())
+
+        threading.Thread(
+            target=self._join_conference_thread,
+            args=(conference_server, conn),
+            daemon=True
+        ).start()
+
+    def _join_conference_thread(self, conference_server, conn):
+        """
+        Helper function to join a conference in a separate thread.
+        """
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        reader = asyncio.StreamReader()
+        protocol = asyncio.StreamReaderProtocol(reader)
+        loop.run_until_complete(loop.connect_accepted_socket(protocol, conn))
+        writer = asyncio.StreamWriter(conn, protocol, reader, loop)
+        loop.run_until_complete(conference_server.handle_client(reader, writer))
 
     def ls_conference(self, conn):
         # 传会议列表给用户
@@ -252,8 +262,8 @@ class MainServer:
             while True:
                 conn, addr = self.server_socket.accept()
                 print(f"New connection from {addr}")
-                self.request_handler(conn, addr)
-                # threading.Thread(target=self.request_handler, args=(conn, addr)).start()
+                # self.request_handler(conn, addr)
+                threading.Thread(target=self.request_handler, args=(conn, addr)).start()
         finally:
             self.server_socket.close()
 

@@ -13,6 +13,7 @@ class ConferenceClient:
         self.conns = None  # you may need to maintain multiple conns for a single conference
         self.support_data_types = []  # for some types of data
         self.share_data = {}
+        self.conference_id=None
 
         self.conference_info = None  # you may need to save and update some conference_info regularly
 
@@ -22,16 +23,20 @@ class ConferenceClient:
         """
         create a conference: send create-conference request to server and obtain necessary data to
         """
+        if self.on_meeting is False:
+            try:
+                self.conns.sendall("create".encode())
+                confirmation = self.conns.recv(1024).decode()
+                print(confirmation)
+                config_id=confirmation.split(":")[1]
+                self.conference_info = config_id
+                self.on_meeting = True
+                self.conference_id = int(config_id)
 
-        try:
-            self.conns.sendall("create".encode())
-            confirmation = self.conns.recv(1024).decode()
-            print(confirmation)
-            config_id=confirmation.split(":")[1]
-            self.conference_info = config_id
-
-        except Exception as e:
-            print(f"[Error]: Failed to create conference: {e}")
+            except Exception as e:
+                print(f"[Error]: Failed to create conference: {e}")
+        else:
+            print("[Error]: you have already join in a conference")
 
     def ls_conference(self):
         self.conns.sendall("ls".encode())
@@ -42,24 +47,27 @@ class ConferenceClient:
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
-        try:
-            self.conns.sendall("join".encode())
-            response = self.conns.recv(1024).decode()
-            print(response)
+        if self.on_meeting is False:
+            try:
+                self.conns.sendall("join".encode())
+                response = self.conns.recv(1024).decode()
+                print(response)
 
-            self.conns.sendall(conference_id.encode())
+                self.conns.sendall(conference_id.encode())
 
-            confirmation = self.conns.recv(1024).decode()
-            print(confirmation)
+                confirmation = self.conns.recv(1024).decode()
+                print(confirmation)
 
-            if "Joining conference" in confirmation:
-                self.on_meeting = True
-                self.conference_id = conference_id
+                if "Joining conference" in confirmation:
+                    self.on_meeting = True
+                    self.conference_id = conference_id
 
-                # Start receiving data in a separate thread
-                threading.Thread(target=self.keep_recv, args=(self.conns,)).start()
-        except Exception as e:
-            print(f"[Error]: Failed to join conference: {e}")
+                    # Start receiving data in a separate thread
+                    # threading.Thread(target=self.keep_recv, args=(self.conns,)).start()
+            except Exception as e:
+                print(f"[Error]: Failed to join conference: {e}")
+        else:
+             print("[Error]: you have already join in a conference")
 
     def quit_conference(self):
         """
