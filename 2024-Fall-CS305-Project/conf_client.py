@@ -1,3 +1,6 @@
+import socket
+import threading
+
 from util import *
 
 
@@ -5,7 +8,7 @@ class ConferenceClient:
     def __init__(self,):
         # sync client
         self.is_working = True
-        self.server_addr = None  # server addr
+        self.server_addr = (SERVER_IP,MAIN_SERVER_PORT)  # server addr
         self.on_meeting = False  # status
         self.conns = None  # you may need to maintain multiple conns for a single conference
         self.support_data_types = []  # for some types of data
@@ -19,13 +22,44 @@ class ConferenceClient:
         """
         create a conference: send create-conference request to server and obtain necessary data to
         """
-        pass
+
+        try:
+            self.conns.sendall("create".encode())
+            confirmation = self.conns.recv(1024).decode()
+            print(confirmation)
+            config_id=confirmation.split(":")[1]
+            self.conference_info = config_id
+
+        except Exception as e:
+            print(f"[Error]: Failed to create conference: {e}")
+
+    def ls_conference(self):
+        self.conns.sendall("ls".encode())
+        response = self.conns.recv(1024).decode()
+        print(response)
 
     def join_conference(self, conference_id):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
         """
-        pass
+        try:
+            self.conns.sendall("join".encode())
+            response = self.conns.recv(1024).decode()
+            print(response)
+
+            self.conns.sendall(conference_id.encode())
+
+            confirmation = self.conns.recv(1024).decode()
+            print(confirmation)
+
+            if "Joining conference" in confirmation:
+                self.on_meeting = True
+                self.conference_id = conference_id
+
+                # Start receiving data in a separate thread
+                threading.Thread(target=self.keep_recv, args=(self.conns,)).start()
+        except Exception as e:
+            print(f"[Error]: Failed to join conference: {e}")
 
     def quit_conference(self):
         """
@@ -80,6 +114,14 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
+        try:
+            self.conns = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.conns.connect(self.server_addr)
+            print("[Info]: Connected to server.")
+        except Exception as e:
+            print(f"[Error]: Unable to connect to server: {e}")
+            self.conns = None
+
         while True:
             if not self.on_meeting:
                 status = 'Free'
@@ -88,6 +130,7 @@ class ConferenceClient:
 
             recognized = True
             cmd_input = input(f'({status}) Please enter a operation (enter "?" to help): ').strip().lower()
+            # cmd_input='create'
             fields = cmd_input.split(maxsplit=1)
             if len(fields) == 1:
                 if cmd_input in ('?', '？'):
@@ -98,6 +141,8 @@ class ConferenceClient:
                     self.quit_conference()
                 elif cmd_input == 'cancel':
                     self.cancel_conference()
+                elif cmd_input=='ls':
+                    self.ls_conference()
                 else:
                     recognized = False
             elif len(fields) == 2:
