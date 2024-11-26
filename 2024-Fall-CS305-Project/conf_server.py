@@ -157,21 +157,90 @@ class MainServer:
         """
         Join conference: add the client to the specified conference.
         """
-        conn.sendall("Enter conference ID to join: ".encode())
-        conference_id = conn.recv(1024).decode().strip()
+        # conference_id = conn.recv(1024).decode().strip()
+        # conference_id = int(conference_id)
+        #
+        # if self.conference_servers.get(conference_id) is None:
+        #     conn.sendall("Conference not found.\n".encode())
+        #     return
+        #
+        # conference_server = self.conference_servers[conference_id]
+        # conn.sendall(f"Joining conference {conference_id}...\n".encode())
+        #
+        # loop = asyncio.get_event_loop()
+        #
+        # # 创建 StreamReader 和 StreamReaderProtocol
+        # reader = asyncio.StreamReader()
+        # protocol = asyncio.StreamReaderProtocol(reader)
+        #
+        # # 将 socket 连接到事件循环中
+        # loop.run_until_complete(loop.connect_accepted_socket(protocol, conn))
+        #
+        # # 创建 StreamWriter
+        # writer = asyncio.StreamWriter(conn, protocol, reader, loop)
+        #
+        # asyncio.run(conference_server.handle_client(reader, writer))
 
-        if conference_id not in self.conference_servers:
-            conn.sendall("Conference not found.\n".encode())
-            return
+        try:
+            # conn.sendall("Enter conference ID: ".encode())
+            conference_id = conn.recv(1024).decode().strip()
 
-        conference_server = self.conference_servers[conference_id]
-        conn.sendall(f"Joining conference {conference_id}...\n".encode())
+            if not conference_id.isdigit() or int(conference_id) not in self.conference_servers:
+                conn.sendall("Invalid conference ID.\n".encode())
+                return
 
-        threading.Thread(
-            target=self._join_conference_thread,
-            args=(conference_server, conn),
-            daemon=True
-        ).start()
+            conference_id = int(conference_id)
+            conference_server = self.conference_servers[conference_id]
+
+            loop = asyncio.get_event_loop()
+
+            # 将同步 socket 包装成 asyncio reader 和 writer
+            async def bridge_coroutine():
+                # 用 await 获取 reader 和 writer
+                reader, writer = await asyncio.open_connection(sock=conn)
+                await conference_server.handle_client(reader, writer)
+
+                # 提交协程到事件循环
+
+            asyncio.run_coroutine_threadsafe(bridge_coroutine(), loop)
+        except Exception as e:
+            print(f"Error in handle_join_conference: {e}")
+            conn.sendall(f"Error: {e}\n".encode())
+        finally:
+            conn.close()
+
+        # threading.Thread(
+        #     target=self._join_conference_thread,
+        #     args=(conference_server, conn),
+        #     daemon=True
+        # ).start()
+    # async def handle_join_conference(self, reader, writer):
+    #     """
+    #     Join conference: add the client to the specified conference.
+    #     """
+    #     # 接收并解析 conference_id
+    #     data = await reader.read(1024)
+    #     conference_id = data.decode().strip()
+    #
+    #     try:
+    #         conference_id = int(conference_id)
+    #     except ValueError:
+    #         writer.write("Invalid conference ID.\n".encode())
+    #         await writer.drain()
+    #         return
+    #
+    #     # 检查会议是否存在
+    #     if conference_id not in self.conference_servers:
+    #         writer.write("Conference not found.\n".encode())
+    #         await writer.drain()
+    #         return
+    #
+    #     conference_server = self.conference_servers[conference_id]
+    #     writer.write(f"Joining conference {conference_id}...\n".encode())
+    #     await writer.drain()
+    #
+    #     # 调用异步的 handle_client 方法
+    #     await conference_server.handle_client(reader, writer)
 
     def _join_conference_thread(self, conference_server, conn):
         """

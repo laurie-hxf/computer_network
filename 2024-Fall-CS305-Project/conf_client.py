@@ -50,8 +50,7 @@ class ConferenceClient:
         if self.on_meeting is False:
             try:
                 self.conns.sendall("join".encode())
-                response = self.conns.recv(1024).decode()
-                print(response)
+
 
                 self.conns.sendall(conference_id.encode())
 
