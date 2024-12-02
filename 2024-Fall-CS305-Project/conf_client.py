@@ -49,15 +49,12 @@ class ConferenceClient:
         """
         if self.on_meeting is False:
             try:
-                self.conns.sendall("join".encode())
-
-
-                self.conns.sendall(conference_id.encode())
+                self.conns.sendall(f"join {conference_id}".encode())
 
                 confirmation = self.conns.recv(1024).decode()
                 print(confirmation)
 
-                if "Joining conference" in confirmation:
+                if "Joined conference" in confirmation:
                     self.on_meeting = True
                     self.conference_id = conference_id
 
@@ -72,13 +69,42 @@ class ConferenceClient:
         """
         quit your on-going conference
         """
-        pass
+        if self.on_meeting is True:
+            try:
+                self.conns.sendall("quit".encode())
+                confirmation = self.conns.recv(1024).decode()
+                print(confirmation)
+
+                if "successfully" in confirmation:
+                    self.on_meeting = False
+                    self.conference_id = None
+
+            except Exception as e:
+                print(f"[Error]: Failed to quit conference: {e}")
+
+        else:
+            print("[Error]: you are not on meeting")
 
     def cancel_conference(self):
         """
         cancel your on-going conference (when you are the conference manager): ask server to close all clients
         """
-        pass
+        if self.on_meeting is True:
+            try:
+                self.conns.sendall("cancel".encode())
+                confirmation = self.conns.recv(1024).decode()
+                print(confirmation)
+
+                if "successfully" in confirmation:
+                    self.on_meeting = False
+                    self.conference_id = None
+
+            except Exception as e:
+                print(f"[Error]: Failed to quit conference: {e}")
+
+        else:
+            print("[Error]: you are not on meeting")
+
 
     def keep_share(self, data_type, send_conn, capture_function, compress=None, fps_or_frequency=30):
         '''
