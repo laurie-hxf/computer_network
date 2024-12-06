@@ -10,7 +10,7 @@ class ConferenceServer:
         self.data_serve_ports = {}
         self.data_types = ['screen', 'camera', 'audio']  # example data types in a video conference
         self.clients_info = None
-        self.client_conns = None
+        self.client_conns = []
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
         self.running=True
         self.creator = creator
@@ -24,35 +24,46 @@ class ConferenceServer:
         """
         running task: handle the in-meeting requests or messages from clients
         """
+        print("why")
         self.client_conns.append(writer)
         # 一直监听客户端数据
-        while self.running:
-            data = await reader.read(1000)  # 获取数据流
-            if not data:
-                break
-            # 处理数据流
-            message = data.decode().strip()
-            if message.startswith("quit"):
-                if writer is self.creator:
-                    self.running = False
+        try:
+            while self.running:
+                data = await reader.read(1000)  # 获取数据流
+                if not data:
+                    break
+                # 处理数据流
+                message = data.decode().strip()
+                if message.startswith("quit"):
+                    if writer is self.creator:
+                        self.running = False
+                        print("quit")
+                        writer.write("quit successfully".encode())
+                        await writer.drain()
+                        self.client_conns.remove(writer)
+
+                    else:
+                        writer.write("quit successfully".encode())
+                        await writer.drain()
+                        self.client_conns.remove(writer)
+
+
+                elif message.startswith("cancel"):
+                    print("cancel")
+                    if writer is self.creator:
+                        self.running = False
+                    else:
+                        writer.write("you have no quality to cancel this session".encode())
+
                 else:
-                    writer.write("quit successfully".encode())
-                    self.client_conns.remove(writer)
-                    writer.close()
+                    # 处理未知命令
+                    writer.write("invalid command".encode())
 
-            elif message.startswith("cancel"):
-                if writer is self.creator:
-                    self.running = False
-                else:
-                    writer.write("you have no quality to cancel this session".encode())
-
-            else:
-                # 处理未知命令
-                writer.write("invalid command".encode())
-
-            # await self.handle_data(reader, writer, 'screen')  # 假设处理的是屏幕数据
-        # 客户端断开连接
-        await self.cancel_conference()
+                # await self.handle_data(reader, writer, 'screen')  # 假设处理的是屏幕数据
+            # 客户端断开连接
+            await self.cancel_conference()
+        except Exception as e:
+            print(e)
         # self.client_conns.remove(writer)
         # writer.close()
 
@@ -67,7 +78,7 @@ class ConferenceServer:
         """
         for c in self.client_conns:
             self.client_conns.remove(c)
-            c.close()
+            # c.close()
 
     async def start(self):
         '''
@@ -100,17 +111,18 @@ class MainServer:
         self.conference_conns = None
         self.conference_servers = {}  # self.conference_servers[conference_id] = ConferenceManager
 
-    async def handle_create_conference(self, writer):
+    async def handle_create_conference(self,reader, writer):
         """
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
         """
         conference_id = len(self.conference_servers) + 1
         conference_server = ConferenceServer(conference_id,writer)
         self.conference_servers[conference_id] = conference_server
-        await conference_server.start()
-        # asyncio.create_task(conference_server.start())
+        # await conference_server.start()
+        asyncio.create_task(conference_server.start())
         writer.write(f"Conference created successfully! ID: {conference_id}\n".encode())
         await writer.drain()
+        await conference_server.handle_client(reader, writer)
 
     async def handle_join_conference(self, reader, writer,conference_id):
         """
@@ -157,7 +169,9 @@ class MainServer:
             message = data.decode()
 
             if message.startswith("create"):
-                await self.handle_create_conference(writer)
+                await self.handle_create_conference(reader,writer)
+                # break
+
 
             elif message.startswith("join"):
                 # 使用 split() 方法分割字符串
@@ -185,7 +199,8 @@ class MainServer:
         """
 
         loop = asyncio.get_event_loop()
-        coro = asyncio.start_server(self.request_handler, self.server_ip, self.server_port, loop=loop)
+        # coro = asyncio.start_server(self.request_handler, self.server_ip, self.server_port, loop=loop)
+        coro = asyncio.start_server(self.request_handler, self.server_ip, self.server_port)
         self.main_server = loop.run_until_complete(coro)
         print(f"Main server started on {self.server_ip}:{self.server_port}")
         loop.run_forever()
