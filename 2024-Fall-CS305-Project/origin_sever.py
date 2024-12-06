@@ -1,6 +1,6 @@
 import asyncio
 from util import *
-
+import uuid
 
 class ConferenceServer:
     def __init__(self, id, creator):
@@ -35,23 +35,32 @@ class ConferenceServer:
                 # 处理数据流
                 message = data.decode().strip()
                 if message.startswith("quit"):
-                    if writer is self.creator:
+                    # if writer is self.creator:
+                        # self.running = False
+                    print("quit")
+
+                    self.client_conns.remove(writer)
+                    if not self.client_conns:
+                        print("None")
                         self.running = False
-                        print("quit")
-                        writer.write("quit successfully".encode())
-                        await writer.drain()
-                        self.client_conns.remove(writer)
-
-                    else:
-                        writer.write("quit successfully".encode())
-                        await writer.drain()
-                        self.client_conns.remove(writer)
-
+                    # else:
+                    #     writer.write("quit successfully".encode())
+                    #     await writer.drain()
+                    #     self.client_conns.remove(writer)
+                    writer.write("quit successfully".encode())
+                    await writer.drain()
+                    break
 
                 elif message.startswith("cancel"):
                     print("cancel")
                     if writer is self.creator:
                         self.running = False
+                        self.client_conns.remove(writer)
+                        # 客户端断开连接
+                        await self.cancel_conference()
+                        writer.write("cancel successfully".encode())
+                        await writer.drain()
+
                     else:
                         writer.write("you have no quality to cancel this session".encode())
 
@@ -60,12 +69,9 @@ class ConferenceServer:
                     writer.write("invalid command".encode())
 
                 # await self.handle_data(reader, writer, 'screen')  # 假设处理的是屏幕数据
-            # 客户端断开连接
-            await self.cancel_conference()
+
         except Exception as e:
             print(e)
-        # self.client_conns.remove(writer)
-        # writer.close()
 
     async def log(self):
         while self.running:
@@ -77,8 +83,8 @@ class ConferenceServer:
         handle cancel conference request: disconnect all connections to cancel the conference
         """
         for c in self.client_conns:
+            c.write("cancel conference".encode())
             self.client_conns.remove(c)
-            # c.close()
 
     async def start(self):
         '''
@@ -115,7 +121,11 @@ class MainServer:
         """
         create conference: create and start the corresponding ConferenceServer, and reply necessary info to client
         """
-        conference_id = len(self.conference_servers) + 1
+        uid = uuid.uuid4()
+        # 转换为整数，保留纯数字
+        conference_id = int(uid.int)
+        conference_id=int(str(conference_id)[:5])
+        # conference_id = len(self.conference_servers) + 1
         conference_server = ConferenceServer(conference_id,writer)
         self.conference_servers[conference_id] = conference_server
         # await conference_server.start()
@@ -158,13 +168,16 @@ class MainServer:
         """
         cancel conference (in-meeting request, a ConferenceServer should be closed by the MainServer)
         """
-        pass
+        for conference_id in list(self.conference_servers):
+            if not self.conference_servers[conference_id].running:
+                self.conference_servers.pop(conference_id)
 
     async def request_handler(self, reader, writer):
         """
         running task: handle out-meeting (or also in-meeting) requests from clients
         """
         while True:
+            self.handle_cancel_conference()
             data = await reader.read(100)
             message = data.decode()
 

@@ -1,4 +1,5 @@
 import socket
+import asyncio
 import threading
 
 from util import *
@@ -39,10 +40,15 @@ class ConferenceClient:
             print("[Error]: you have already join in a conference")
 
     def ls_conference(self):
-        self.conns.sendall("ls".encode())
-        response = self.conns.recv(1024).decode()
-        print(response)
-
+        if self.on_meeting is False:
+            try:
+                self.conns.sendall("ls".encode())
+                response = self.conns.recv(1024).decode()
+                print(response)
+            except Exception as e:
+                print(f"[Error]: Failed to create conference: {e}")
+        else:
+            print("[Error]: you have already join in a conference, can't ls it")
     def join_conference(self, conference_id):
         """
         join a conference: send join-conference request with given conference_id, and obtain necessary data to
@@ -78,6 +84,10 @@ class ConferenceClient:
                 if "successfully" in confirmation:
                     self.on_meeting = False
                     self.conference_id = None
+                elif "cancel conference" in confirmation:
+                    print("[Info]: Conference has been canceled by the server.")
+                    self.on_meeting = False
+                    self.conference_id = None
 
             except Exception as e:
                 print(f"[Error]: Failed to quit conference: {e}")
@@ -96,6 +106,10 @@ class ConferenceClient:
                 print(confirmation)
 
                 if "successfully" in confirmation:
+                    self.on_meeting = False
+                    self.conference_id = None
+                elif "cancel conference" in confirmation:
+                    print("[Info]: Conference has been canceled by the server.")
                     self.on_meeting = False
                     self.conference_id = None
 
@@ -143,6 +157,21 @@ class ConferenceClient:
         pay attention to the exception handling
         '''
 
+
+    def receive_messages(self):
+        """ Continuously listen for messages from the server (e.g., cancel) """
+        while True:
+            try:
+                confirmation = self.conns.recv(1024).decode()
+                if not confirmation:
+                    break
+                if "cancel" in confirmation:
+                    print("[Info]: Conference has been canceled by the server.")
+                    self.on_meeting = False
+                    self.conference_id = None
+            except Exception as e:
+                print(f"[Error]: {e}")
+                break
     def start(self):
         """
         execute functions based on the command line input
@@ -154,6 +183,8 @@ class ConferenceClient:
         except Exception as e:
             print(f"[Error]: Unable to connect to server: {e}")
             self.conns = None
+
+        # threading.Thread(target=self.receive_messages, daemon=True).start()
 
         while True:
             if not self.on_meeting:
