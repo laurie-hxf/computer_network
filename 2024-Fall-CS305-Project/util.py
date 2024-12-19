@@ -4,11 +4,11 @@ Including data capture, image compression and image overlap
 Note that you can use your own implementation as well :)
 '''
 from io import BytesIO
-import pyaudio
-import cv2
-import pyautogui
-import numpy as np
-from PIL import Image, ImageGrab
+import pyaudio     #捕获音频数据并将其传输或处理
+import cv2         #读取视频流、捕获帧、图像处理
+import pyautogui   #用于控制鼠标、键盘和屏幕截图等
+import numpy as np #处理图像数据
+from PIL import Image, ImageGrab #ImageGrab获屏幕截图 Image提供对图像的基本处理，如打开图像、显示图像、转换图像格式等。
 from config import *
 
 
